@@ -1,95 +1,106 @@
 <?php
-
 session_start();
-
-if (!isset($_SESSION['username'])) {
-    header("Location: login.php");
-    exit;
-}
-
 include "koneksi.php";
+include "layout.php";
+wajib_login();
 
 $id_user = $_SESSION['id_user'];
+$gaji = (float) $_SESSION['gaji_bulanan'];
+$ringkasan = ambil_ringkasan($koneksi, $id_user, $gaji);
+$saran = rekomendasi_otomatis($ringkasan);
 
-$total_pengeluaran = mysqli_query(
+$kategori_query = mysqli_query(
     $koneksi,
-    "SELECT SUM(jumlah) as total
+    "SELECT kategori, COALESCE(SUM(jumlah), 0) AS total
     FROM pengeluaran
-    WHERE id_user='$id_user'"
+    WHERE id_user='$id_user'
+    GROUP BY kategori
+    ORDER BY total DESC
+    LIMIT 5"
 );
 
-$hasil = mysqli_fetch_assoc($total_pengeluaran);
-
-$total = $hasil['total'];
-
-if ($total == NULL) {
-    $total = 0;
-}
-
-$sisa_uang = $_SESSION['gaji_bulanan'] - $total;
-
-$persentase = 0;
-
-if ($_SESSION['gaji_bulanan'] > 0) {
-    $persentase = ($total / $_SESSION['gaji_bulanan']) * 100;
-}
-
-if ($persentase <= 50) {
-    $status = "Sehat";
-} elseif ($persentase <= 80) {
-    $status = "Perlu Perhatian";
-} else {
-    $status = "Berisiko";
-}
-
+render_header("Dashboard Keuangan", "dashboard");
 ?>
 
-<!DOCTYPE html>
-<html>
+<section class="grid grid-4">
+    <div class="card metric">
+        <span class="label">Gaji bulanan</span>
+        <span class="value"><?php echo rupiah($gaji); ?></span>
+    </div>
+    <div class="card metric">
+        <span class="label">Total pengeluaran</span>
+        <span class="value"><?php echo rupiah($ringkasan['total_pengeluaran']); ?></span>
+    </div>
+    <div class="card metric">
+        <span class="label">Target tabungan/bulan</span>
+        <span class="value"><?php echo rupiah($ringkasan['total_tabungan']); ?></span>
+    </div>
+    <div class="card metric">
+        <span class="label">Sisa uang</span>
+        <span class="value"><?php echo rupiah($ringkasan['sisa_uang']); ?></span>
+    </div>
+</section>
 
-<head>
-    <title>Dashboard Mapan</title>
-</head>
+<br>
 
-<body style="font-family: Arial;">
+<section class="grid grid-2">
+    <div class="card">
+        <h2>Financial Health Score</h2>
+        <p class="muted">Skor dihitung dari rasio pengeluaran, tabungan, dan sisa uang bulanan.</p>
+        <div class="metric">
+            <span class="value"><?php echo $ringkasan['score']; ?>/100</span>
+        </div>
+        <p>
+            <span class="badge <?php echo $ringkasan['warna_score']; ?>">
+                <?php echo $ringkasan['kategori_score']; ?>
+            </span>
+        </p>
+        <div class="progress" style="--value: <?php echo $ringkasan['score']; ?>%;">
+            <span></span>
+        </div>
+    </div>
 
-    <h2>Dashboard Mapan</h2>
+    <div class="card">
+        <h2>Rekomendasi Otomatis</h2>
+        <ul class="recommendations">
+            <?php foreach ($saran as $item) { ?>
+                <li><?php echo htmlspecialchars($item); ?></li>
+            <?php } ?>
+        </ul>
+    </div>
+</section>
 
-    <p>Selamat datang, <b><?php echo $_SESSION['nama']; ?></b></p>
-    <p>Username: <?php echo $_SESSION['username']; ?></p>
+<br>
 
-    <hr>
+<section class="grid grid-2">
+    <div class="card">
+        <h2>Pengeluaran Terbesar</h2>
+        <?php if (mysqli_num_rows($kategori_query) == 0) { ?>
+            <p class="muted">Belum ada data pengeluaran. Tambahkan data agar grafik muncul.</p>
+        <?php } else { ?>
+            <?php while ($row = mysqli_fetch_assoc($kategori_query)) {
+                $persen = $ringkasan['total_pengeluaran'] > 0 ? ($row['total'] / $ringkasan['total_pengeluaran']) * 100 : 0;
+            ?>
+                <div class="bar-row">
+                    <strong><?php echo htmlspecialchars($row['kategori']); ?></strong>
+                    <div class="bar" style="--value: <?php echo round($persen, 2); ?>%;"><span></span></div>
+                    <span><?php echo rupiah($row['total']); ?></span>
+                </div>
+            <?php } ?>
+        <?php } ?>
+    </div>
 
-    <h3>Ringkasan Keuangan</h3>
+    <div class="card">
+        <h2>Aksi Cepat</h2>
+        <p class="muted">Gunakan menu ini untuk mengisi dan mensimulasikan keputusan keuangan.</p>
+        <div class="actions">
+            <a class="btn" href="profil_gaji.php">Ubah Gaji</a>
+            <a class="btn" href="tambah_pengeluaran.php">Tambah Pengeluaran</a>
+            <a class="btn secondary" href="anggaran.php">Budget Planner</a>
+            <a class="btn secondary" href="simulasi_cicilan.php">Simulasi Cicilan</a>
+            <a class="btn secondary" href="target_tabungan.php">Rencana Tabungan</a>
+        </div>
+    </div>
+</section>
 
-    <p>
-        Gaji Bulanan :
-        Rp<?php echo number_format($_SESSION['gaji_bulanan'], 0, ',', '.'); ?>
-    </p>
-
-    <p>
-        Total Pengeluaran :
-        Rp<?php echo number_format($total, 0, ',', '.'); ?>
-    </p>
-
-    <p>
-        Sisa Uang :
-        Rp<?php echo number_format($sisa_uang, 0, ',', '.'); ?>
-    </p>
-
-    <p>
-        Status Keuangan :
-        <b><?php echo $status; ?></b>
-    </p>
-
-    <hr>
-
-    <a href="pengeluaran.php">Kelola Pengeluaran</a>
-
-    <br><br>
-
-    <a href="logout.php">Logout</a>
-
-</body>
-
-</html>
+<?php render_footer(); ?>
