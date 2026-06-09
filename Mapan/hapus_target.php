@@ -12,9 +12,9 @@ $id = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 
 mysqli_query(
     $koneksi,
-    "DELETE FROM pengeluaran WHERE id_pengeluaran='$id' AND id_user='$id_user'"
+    "DELETE FROM target_tabungan WHERE id_target='$id' AND id_user='$id_user'"
 );
 
-header("Location: Pengeluaran.php");
+header("Location: target_tabungan.php");
 exit;
 ?>
